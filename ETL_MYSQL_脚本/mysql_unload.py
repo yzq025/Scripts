@@ -15,6 +15,14 @@ except:
     sys.exit(1)
 
 
+__author__ = """
+yzq
+"""
+__copyright__ = """
+Copyright 2017 yzq
+"""
+__version__ = "20170902"
+
 class MysqlUtil:
     
     def __init__(self, cmdparam): 
