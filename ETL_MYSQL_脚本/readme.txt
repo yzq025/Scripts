@@ -13,7 +13,6 @@ NULL值如果是\N的如何导入问题：使用escape="\\\\"
 
 
 还缺：
-	FTP或SFTP工具
 	MYSQL库与库同步工具
 
 

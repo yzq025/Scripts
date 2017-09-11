@@ -3,7 +3,10 @@
 
 import sys, getopt
 import datetime, time
+import logging
+import os
 import binascii
+
 try:
     import MySQLdb
     from MySQLdb import FIELD_TYPE
@@ -38,9 +41,23 @@ class MysqlUtil:
         self.db = None
         self.table = None
         self.opt_enclose = '"'
+        self.logfile = None
+
 
         # 解析命令行参数  
         self.parseparam(cmdparam)
+
+
+        #设置日志
+        logging.basicConfig(filename = self.logfile, level = logging.INFO,
+                format  = '%(levelname)s %(asctime)s P[%(process)d] F[%(filename)s] L[%(lineno)d]: %(message)s',
+                datefmt = '%Y%m%d %H:%M:%S')
+        if self.logfile <> None:
+            console = logging.StreamHandler()
+            console.setLevel(logging.DEBUG)
+            logging.getLogger('').addHandler(console)
+        logging.info(" ".join(sys.argv))
+
          
         # 初始化连接   
         self.connectdb()
@@ -64,12 +81,12 @@ class MysqlUtil:
             cur = self.conn.cursor()
             cur.execute("SELECT VERSION()")
             data = cur.fetchone()
-            print "[INFO] Mysql Database version : %s " % data
+            logging.info("Mysql Database version : %s " % data)
             cur.execute("set names " + self.charset)
-            print "[INFO] Set names : %s " % self.charset
+            logging.info("Set names : %s " % self.charset)
             cur.close()
         except MySQLdb.Error, e:
-            print "Error line:%d code:%d msg:%s" % (sys._getframe().f_lineno,e.args[0],e.args[1])
+            logging.error("code:%d msg:%s" % (e.args[0],e.args[1]))
             if cur: cur.close()
             if self.conn: self.conn.close()
             sys.exit(2)
@@ -98,13 +115,13 @@ class MysqlUtil:
         try:
             cur.execute(sql)
         except MySQLdb.Error, e:
-            print "Error line:%d code:%d msg:%s" % (sys._getframe().f_lineno,e.args[0],e.args[1])
+            logging.error("code:%d msg:%s" % (e.args[0],e.args[1]))
             cur.close()
             self.conn.close()
             sys.exit(2)
         
         numrows = int(cur.rowcount)
-        print "[INFO] Table [%s] total rows : %d" % (self.table, numrows)
+        logging.info("Table [%s] total rows : %d" % (self.table, numrows))
         fp = open(self.outputfile, 'w')
         for i in range(numrows):
             # 一次获取 buffrows 行记录
@@ -114,10 +131,10 @@ class MysqlUtil:
                 fp.write(self.field.join(line) + self.record)
             
             if (i+1) % self.buffrows == 0 :
-                print '[INFO] %d line exported ...' % (i+1)
+                logging.info("%d line exported ..." % (i+1))
         
-        print '[INFO] Total %d line exported ...' % numrows 
-        print '[INFO] Done ...\n' 
+        logging.info("Total %d line exported ..." % numrows)
+        logging.info("Done\n") 
         fp.close()
         cur.close()
         self.conn.close()
@@ -126,7 +143,7 @@ class MysqlUtil:
     # 解析参数
     def parseparam(self, param):
         try:
-            opts, args = getopt.getopt(param, "h:P:d:u:p:t:o:", ["field=", "record=", "buffrows=", "charset=", "opt_enclose="])
+            opts, args = getopt.getopt(param, "h:P:d:u:p:t:o:", ["field=", "record=", "buffrows=", "charset=", "opt_enclose=", "logfile="])
         except:
             self.usage()
             sys.exit(1)             
@@ -156,15 +173,17 @@ class MysqlUtil:
                     self.record = binascii.a2b_hex(value.replace('0x','') )
                 else:
                     self.record = eval( '"' + value + '"' )
+            elif op == "--buffrows":
+                self.buffrows = int(value)
+            elif op == "--charset":
+                self.charset = value
             elif op == "--opt_enclose":
                 if value.lower()[:2] == '0x':
                     self.opt_enclose = binascii.a2b_hex(value.replace('0x','') )
                 else:
                     self.opt_enclose = eval( '"' + value + '"' )
-            elif op == "--buffrows":
-                self.buffrows = int(value)
-            elif op == "--charset":
-                self.charset = value
+            elif op == "--logfile":
+                self.logfile = value
                 
         if self.host == None or self.user == None or self.password == None or self.db == None or self.table == None:
             self.usage()
@@ -187,6 +206,7 @@ class MysqlUtil:
         print "    --record      行记录分隔符(可省, 默认为 \\n), DOS格式请使用--record=\"\\r\\n\" "
         print "    --opt_enclose 字符串外包装符(可省, 默认为 \") "
         print "    --buffrows    一次获取记录行数(可省, 默认为 10000) "
+        print "    --logfile     日志文件名 "
         print
         print "    for field and record, you can use '0x' to specify hex character code,"
         print "    \\r=0x0d \\n=0x0a |=0x7c ,=0x2c, \\t=0x09, :=0x3a, #=0x23, \"=0x22 '=0x27"

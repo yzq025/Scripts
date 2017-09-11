@@ -3,7 +3,10 @@
 
 import sys, getopt
 import datetime, time
-import binascii
+import logging
+import os
+
+
 try:
     import MySQLdb
     from MySQLdb import FIELD_TYPE
@@ -39,10 +42,24 @@ class MysqlUtil:
         self.db = None
         self.table = None
         self.opt_enclose = "'\"'"
+        self.logfile = None
+
 
         # 解析命令行参数  
         self.parseparam(cmdparam)
          
+
+        #设置日志
+        logging.basicConfig(filename = self.logfile, level = logging.INFO,
+                format  = '%(levelname)s %(asctime)s P[%(process)d] F[%(filename)s] L[%(lineno)d]: %(message)s',
+                datefmt = '%Y%m%d %H:%M:%S')
+        if self.logfile <> None:
+            console = logging.StreamHandler()
+            console.setLevel(logging.DEBUG)
+            logging.getLogger('').addHandler(console)
+        logging.info(" ".join(sys.argv))
+
+
         # 初始化连接   
         self.connectdb()
         
@@ -64,12 +81,12 @@ class MysqlUtil:
             cur = self.conn.cursor()
             cur.execute("SELECT VERSION()")
             data = cur.fetchone()
-            print "[INFO] Mysql Database version : %s " % data
+            logging.info("Mysql Database version : %s " % data)
 #            cur.execute("set sql_mode='TRADITIONAL'")
-#            print "[INFO] Set sql_mode='TRADITIONAL'"
+#            logging.info("Set sql_mode='TRADITIONAL'")
             cur.close()
         except MySQLdb.Error, e:
-            print "Error line:%d code:%d msg:%s" % (sys._getframe().f_lineno,e.args[0],e.args[1])
+            logging.error("code:%d msg:%s" % (e.args[0],e.args[1]))
             if cur: cur.close()
             if self.conn: self.conn.close()
             sys.exit(2)
@@ -80,18 +97,18 @@ class MysqlUtil:
         cur = self.conn.cursor()  
         sql = 'select * from ' + self.table
         sql = "load data local infile '" + self.inputfile + "' replace into table " + self.table + " character set " + self.charset + " fields terminated by " + self.field + " optionally enclosed by " + self.opt_enclose + " escaped by " + self.escape + " lines terminated by " + self.record
-        print '[INFO] SQL: ' + sql 
+        logging.info("SQL: " + sql)
         try:
             cur.execute(sql)
-            print '[INFO] Query OK: %d rows affected ...' % cur.rowcount
-            print '[INFO] Processed %s ...' % cur._info
+            logging.info("Query OK: %d rows affected ..." % cur.rowcount)
+            logging.info("Processed %s ..." % cur._info)
             try:
                 numrows = int( cur._info.split("Records:")[1].split()[0] )
             except:
                 numrows = 0
-            print '[INFO] Total %d record imported ...' % numrows
+            logging.info("Total %d record imported ..." % numrows)
         except MySQLdb.Error, e:
-            print "Error line:%d code:%d msg:%s" % (sys._getframe().f_lineno,e.args[0],e.args[1])
+            logging.error("code:%d msg:%s" % (e.args[0],e.args[1]))
             cur.close()
             self.conn.close()
             sys.exit(2)
@@ -99,13 +116,13 @@ class MysqlUtil:
         cur.close()
         self.conn.commit()
         self.conn.close()
-        print '[INFO] Done ...' 
+        logging.info("Done\n")
 
 
     # 解析参数
     def parseparam(self, param):
         try:
-            opts, args = getopt.getopt(param, "h:P:d:u:p:t:f:", ["field=", "record=", "charset=", "opt_enclose=", "escape="])
+            opts, args = getopt.getopt(param, "h:P:d:u:p:t:f:", ["field=", "record=", "charset=", "opt_enclose=", "escape=", "logfile="])
         except:
             self.usage()
             sys.exit(1)             
@@ -143,6 +160,8 @@ class MysqlUtil:
                     self.escape = "'" + value + "'"
             elif op == "--charset":
                 self.charset = value
+            elif op == "--logfile":
+                self.logfile = value
                 
         if self.host == None or self.user == None or self.password == None or self.db == None or self.table == None or self.inputfile == None:
             self.usage()
@@ -165,6 +184,7 @@ class MysqlUtil:
         print "    --record      行记录分隔符(可省, 默认为 \\n), DOS格式请使用--record=\"\\r\\n\" "
         print "    --opt_enclose 字符串外包装符(可省, 默认为 \") "
         print "    --escape      转义符(可省, 默认为空不转义, 如果文本有\\N或\\n需要转义,使用--escape=\"\\\\\\\\\") "
+        print "    --logfile     日志文件 "
         print
         print "    for field and record, you can use '0x' to specify hex character code,"
         print "    \\r=0x0d \\n=0x0a |=0x7c ,=0x2c, \\t=0x09, :=0x3a, #=0x23, \"=0x22 '=0x27"
